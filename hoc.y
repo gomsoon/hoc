@@ -5,6 +5,7 @@
 %token	NUMBER
 %left	'+' '-'		/* left associative, same precedence */
 %left	'*' '/'		/* left assoc., higher precedence */
+%left	UNARYMINUS	/* unary minus operator */
 %%
 list:		/* nothing */
 		| list '\n'
@@ -12,6 +13,7 @@ list:		/* nothing */
 		;
 
 expr:		NUMBER			{ $$ = $1; }
+		| '-' expr	%prec UNARYMINUS { $$ = -$2; }
 		| expr '+' expr		{ $$ = $1 + $3; }
 		| expr '-' expr		{ $$ = $1 - $3; }
 		| expr '*' expr		{ $$ = $1 * $3; }
