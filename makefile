@@ -1,4 +1,4 @@
 CC=gcc
 
-hoc1:	hoc.o
-	gcc hoc.o -o hoc1
+hoc2:	hoc.o
+	gcc hoc.o -o hoc2
