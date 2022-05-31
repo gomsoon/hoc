@@ -1,7 +1,8 @@
 #include <math.h>
 #include <errno.h>
 
-extern int	errno;
+extern void execerror(char* s, char* t);
+
 double errcheck();
 
 double Log(double x)

@@ -1,28 +1,38 @@
 %{
+#include "hoc.h"
 #include <stdio.h>
-double mem[26];		/* memory for variables 'a'..'z' */
+int yylex(void);
+int yyerror(char* s);
 void execerror(char* s, char* t);
+extern double Pow();
 %}
 %union {			/* stack type */
 	double	val;	/* actual value */
-	int		index;	/* index into mem[] */
+	Symbol*	sym;	/* symbol table pointer */
 }
 %token	<val>		NUMBER
-%token	<index>		VAR
-%type	<val>		expr
+%token	<sym>		VAR BLTIN UNDEF
+%type	<val>		expr asgn
 %right	'='
 %left	'+' '-'		/* left associative, same precedence */
 %left	'*' '/'		/* left assoc., higher precedence */
 %left	UNARYMINUS	/* unary minus operator */
+%right	'^'			/* exponentiation */
 %%
 list:		/* nothing */
 		| list '\n'
+		| list asgn '\n'
 		| list expr '\n'	{ printf("\t%.8g\n", $2); }
 		| list error '\n'	{ yyerrok; }
 		;
+asgn:	  VAR '=' expr		{ $$ = $1->u.val = $3; $1->type = VAR; }
+		;
 expr:	  NUMBER
-		| VAR				{ $$ = mem[$1]; } 
-		| VAR '=' expr		{ $$ = mem[$1] = $3; }
+		| VAR				{ if ($1->type == UNDEF)
+									execerror("undefined variable", $1->name);
+							  $$ = $1->u.val; }
+		| asgn
+		| BLTIN '(' expr ')'	{ $$ = (*($1->u.ptr))($3); }
 		| expr '+' expr		{ $$ = $1 + $3; }
 		| expr '-' expr		{ $$ = $1 - $3; }
 		| expr '*' expr		{ $$ = $1 * $3; }
@@ -31,6 +41,7 @@ expr:	  NUMBER
 					execerror("division by zero", NULL);
 				$$ = $1 / $3; 
 			}
+		| expr '^' expr		{ $$ = Pow($1, $3); }
 		| '(' expr ')'		{ $$ = $2; }
 		| '-' expr	%prec UNARYMINUS { $$ = -$2; }
 		;
@@ -39,9 +50,13 @@ expr:	  NUMBER
 #include <ctype.h>
 #include <signal.h>
 #include <setjmp.h>
+
+extern void sym_init(void);
+
 jmp_buf begin;
 
 void fpecatch(int signo);
+int yylex(void);
 
 char*	progname;		/* for error messages */
 int		lineno = 1;
@@ -50,13 +65,15 @@ void main(int argc, char* argv[])	/* hoc2 */
 {
 
 	progname = argv[0];
+
+	sym_init();
 	setjmp(begin);
 	signal(SIGFPE, fpecatch);
 	yyparse();
 }
 
 
-int yylex()		/* hoc2 */
+int yylex()		/* hoc3 */
 {
 	int c;
 
@@ -72,9 +89,25 @@ int yylex()		/* hoc2 */
 		return NUMBER;
 	}
 
-	if (islower(c)) {
-		yylval.index = c - 'a';		/* ASCII only */
-		return VAR;
+	if (isalpha(c)) {
+		Symbol* s = (Symbol*)NULL;
+		char sbuf[100];
+		char* p = sbuf;
+
+		do {
+			*p++ = c;
+		} while ((c = getchar()) != EOF && isalnum(c));
+		ungetc(c, stdin);
+		*p = '\0';
+
+		s = sym_lookup(sbuf);
+
+		if (s == (Symbol*)NULL)
+			s = sym_install(sbuf, UNDEF, 0.0);
+
+		yylval.sym = s;
+
+		return s->type == UNDEF ? VAR : s->type;
 	}
 
 	if (c == '\n')
